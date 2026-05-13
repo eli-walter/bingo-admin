@@ -1,0 +1,6 @@
+{
+  "appId": "com.bingogroup.admin",
+  "appName": "BingoAdmin",
+  "webDir": "build",
+  "server": { "androidScheme": "https" }
+}
