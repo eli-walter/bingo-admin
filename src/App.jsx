@@ -17,8 +17,9 @@ const dShort = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "shor
    STORAGE
 ══════════════════════════════════════════════════════ */
 const SK = { P: "ba-players-v1", T: "ba-txns-v1", G: "ba-games-v1" };
-const sget = async (k) => { try { const r = await window.storage.get(k); return r ? JSON.parse(r.value) : null; } catch { return null; } };
-const sset = async (k, v) => { try { await window.storage.set(k, JSON.stringify(v)); } catch {} };
+// Storage: uses localStorage — persists across app restarts on Android (Capacitor WebView)
+const sget = async (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
+const sset = async (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
 /* ══════════════════════════════════════════════════════
    DESIGN TOKENS
