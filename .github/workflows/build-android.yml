@@ -53,145 +53,54 @@ jobs:
             echo "✅ Android platform folder already present"
           fi
 
-      # ── 7. ImageMagick for icon/splash generation ──────────────────────────
-      - name: Install ImageMagick
+      # ── 7. Pre-process icon so logo fills 95% of the icon frame ─────────────
+      # Android adaptive icons have a safe zone (inner 66dp of 108dp canvas).
+      # We pre-scale the source PNG so the logo fills exactly 95% of the canvas,
+      # giving it maximum visual presence inside any launcher icon shape.
+      - name: Install ImageMagick and pre-process icon (95% fill)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y imagemagick bc
+          sudo apt-get update -qq && sudo apt-get install -y imagemagick bc
 
-      # ── 8. Generate all launcher icons from assets/icon.png ───────────────
-      - name: Generate launcher icons (all densities)
+          CANVAS=1024
+          # 95% of canvas = logo occupies 972px, leaving 26px total (13px each side)
+          LOGO_SIZE=$(echo "$CANVAS * 95 / 100" | bc)
+
+          echo "🎨 Pre-processing icon: logo ${LOGO_SIZE}×${LOGO_SIZE}px on ${CANVAS}×${CANVAS}px canvas (95% fill)"
+
+          convert assets/icon.png \
+            -resize ${LOGO_SIZE}x${LOGO_SIZE} \
+            -gravity center \
+            -background none \
+            -extent ${CANVAS}x${CANVAS} \
+            assets/icon.png
+
+          echo "✅ Icon pre-processed — logo now fills 95% of frame"
+
+      # ── 8. Generate icons + splash via @capacitor/assets (official tool) ───
+      # Reads the pre-processed assets/icon.png (logo at 95% fill) and produces
+      # all mipmap densities, adaptive icons, and splash screens.
+      - name: Install @capacitor/assets
+        run: npm install -D @capacitor/assets
+
+      - name: Generate all icons and splash screens
         run: |
-          ICON="assets/icon.png"
-          echo "🎨 Generating launcher icons…"
+          npx @capacitor/assets generate \
+            --android \
+            --iconBackgroundColor "#F0F4F8" \
+            --iconBackgroundColorDark "#F0F4F8" \
+            --splashBackgroundColor "#F0F4F8" \
+            --splashBackgroundColorDark "#F0F4F8"
+          echo "✅ Icons and splash generated via @capacitor/assets"
 
-          # Square icons for each screen density
-          for ENTRY in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
-            DENSITY="${ENTRY%%:*}"
-            SIZE="${ENTRY##*:}"
-            DIR="android/app/src/main/res/${DENSITY}"
-            mkdir -p "$DIR"
-
-            # Standard square launcher icon
-            convert "$ICON" -resize ${SIZE}x${SIZE} "${DIR}/ic_launcher.png"
-
-            # Round launcher icon (circle-cropped)
-            convert "$ICON" -resize ${SIZE}x${SIZE} \
-              \( +clone -alpha extract \
-                 -draw "fill white circle $((SIZE/2)),$((SIZE/2)) $((SIZE/2)),0" \) \
-              -alpha off -compose CopyOpacity -composite \
-              "${DIR}/ic_launcher_round.png"
-
-            echo "  ✅ ${DENSITY} — ${SIZE}×${SIZE}px (square + round)"
-          done
-
-          # ── Adaptive icon XML (Android 8+, API 26+) ──────────────────────
-          ANYDPI_DIR="android/app/src/main/res/mipmap-anydpi-v26"
-          mkdir -p "$ANYDPI_DIR"
-
-          cat > "${ANYDPI_DIR}/ic_launcher.xml" << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-            <background android:drawable="@color/ic_launcher_background"/>
-            <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-          </adaptive-icon>
-          XMLEOF
-
-          cat > "${ANYDPI_DIR}/ic_launcher_round.xml" << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-            <background android:drawable="@color/ic_launcher_background"/>
-            <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
-          </adaptive-icon>
-          XMLEOF
-
-          # Foreground layer for adaptive icon (108dp target = 432px at xxxhdpi)
-          convert "$ICON" -resize 432x432 \
-            -gravity center -background none -extent 432x432 \
-            "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
-
-          # Background colour for adaptive icon
-          VALUES_DIR="android/app/src/main/res/values"
-          mkdir -p "$VALUES_DIR"
-
-          # Remove Capacitor-generated ic_launcher_background.xml to avoid duplicate resource error
-          rm -f "${VALUES_DIR}/ic_launcher_background.xml"
-
-          if ! grep -q "ic_launcher_background" "${VALUES_DIR}/colors.xml" 2>/dev/null; then
-            if [ -f "${VALUES_DIR}/colors.xml" ]; then
-              sed -i 's|</resources>|    <color name="ic_launcher_background">#F0F4F8</color>\n</resources>|' \
-                "${VALUES_DIR}/colors.xml"
-            else
-              cat > "${VALUES_DIR}/colors.xml" << 'COLOREOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-            <color name="ic_launcher_background">#F0F4F8</color>
-          </resources>
-          COLOREOF
-            fi
-          fi
-
-          echo "🎉 All launcher icons generated!"
-
-      # ── 9. Generate status-bar / top-bar notification icon ────────────────
-      # Android requires notification icons to be white + transparent only.
-      # This icon appears in the top status bar when the app is running.
-      - name: Generate top-bar / notification icon
+      # ── 9. Remove duplicate ic_launcher_background resource ───────────────
+      # Capacitor scaffolds ic_launcher_background.xml; @capacitor/assets also
+      # writes to colors.xml — remove the standalone file to avoid Gradle conflict.
+      - name: Remove duplicate ic_launcher_background resource
         run: |
-          ICON="assets/icon.png"
-          echo "🔔 Generating status-bar icons…"
+          rm -f android/app/src/main/res/values/ic_launcher_background.xml
+          echo "✅ Duplicate resource removed"
 
-          for ENTRY in "mdpi:24" "hdpi:36" "xhdpi:48" "xxhdpi:72" "xxxhdpi:96"; do
-            DENSITY="${ENTRY%%:*}"
-            SIZE="${ENTRY##*:}"
-            DIR="android/app/src/main/res/drawable-${DENSITY}"
-            mkdir -p "$DIR"
-
-            # White silhouette on transparent background (Android guideline)
-            convert "$ICON" -resize ${SIZE}x${SIZE} \
-              -alpha set -fuzz 10% \
-              -fill white -colorize 100 \
-              "${DIR}/ic_stat_notification.png"
-
-            echo "  ✅ drawable-${DENSITY} — ${SIZE}×${SIZE}px"
-          done
-
-          echo "🎉 Top-bar icons generated!"
-
-      # ── 10. Generate splash screen ─────────────────────────────────────────
-      # Icon is rendered at 35% of the reference screen width (1080px),
-      # centred on the app's background colour.
-      - name: Generate splash screen (icon at 35% screen width)
-        run: |
-          ICON="assets/icon.png"
-          DRAWABLE_DIR="android/app/src/main/res/drawable"
-          mkdir -p "$DRAWABLE_DIR"
-
-          CANVAS_W=1080
-          CANVAS_H=1920
-          ICON_SIZE=$(echo "$CANVAS_W * 35 / 100" | bc)   # = 378px
-
-          echo "🖼  Splash: canvas ${CANVAS_W}×${CANVAS_H}, icon ${ICON_SIZE}×${ICON_SIZE}px (35% width)"
-
-          # Portrait splash
-          convert -size ${CANVAS_W}x${CANVAS_H} xc:"#F0F4F8" \
-            \( "$ICON" -resize ${ICON_SIZE}x${ICON_SIZE} \) \
-            -gravity center -composite \
-            "${DRAWABLE_DIR}/splash.png"
-
-          # Landscape splash (35% of 1920 wide canvas)
-          LAND_W=1920
-          LAND_H=1080
-          LAND_ICON=$(echo "$LAND_W * 35 / 100" | bc)     # = 672px
-
-          convert -size ${LAND_W}x${LAND_H} xc:"#F0F4F8" \
-            \( "$ICON" -resize ${LAND_ICON}x${LAND_ICON} \) \
-            -gravity center -composite \
-            "${DRAWABLE_DIR}/splash_land.png"
-
-          echo "✅ Splash screens generated"
-
-      # ── 11. Accept Android SDK licences ────────────────────────────────────
+      # ── 10. Accept Android SDK licences ────────────────────────────────────
       - name: Accept Android SDK licences
         run: |
           SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
@@ -201,11 +110,11 @@ jobs:
             echo "sdkmanager not found at expected path — licences may already be accepted"
           fi
 
-      # ── 12. Sync Capacitor → Android ───────────────────────────────────────
+      # ── 11. Sync Capacitor → Android ───────────────────────────────────────
       - name: Sync Capacitor to Android
         run: npx cap sync android
 
-      # ── 13. Build debug APK ────────────────────────────────────────────────
+      # ── 12. Build debug APK ────────────────────────────────────────────────
       - name: Write android/local.properties (point Gradle to correct SDK)
         run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
 
@@ -218,7 +127,7 @@ jobs:
           unset ANDROID_SDK_ROOT
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      # ── 14. Rename & upload ────────────────────────────────────────────────
+      # ── 13. Rename & upload ────────────────────────────────────────────────
       - name: Rename APK to manuia-finance.apk
         run: |
           APK=$(find android -name "app-debug.apk" | head -1)
