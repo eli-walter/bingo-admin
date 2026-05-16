@@ -1,8 +1,9 @@
+// File location: src/App.jsx
 import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Users, Gamepad2, History,
   Plus, X, Search, ChevronRight, Trophy,
-  Check, Star, Wallet, DollarSign
+  Check, Star, DollarSign
 } from "lucide-react";
 
 /* ══════════════════════════════════════════════════════
@@ -11,7 +12,6 @@ import {
 const uid = () => `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
 const $$ = (n) => `$${Math.abs(Number(n)).toFixed(2)}`;
 const dShort = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-const dFull = (iso) => new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "2-digit", hour: "2-digit", minute: "2-digit", hour12: true });
 
 /* ══════════════════════════════════════════════════════
    STORAGE
@@ -21,54 +21,33 @@ const sget = async (k) => { try { const r = await window.storage.get(k); return 
 const sset = async (k, v) => { try { await window.storage.set(k, JSON.stringify(v)); } catch {} };
 
 /* ══════════════════════════════════════════════════════
-   SEED DATA  (from the spreadsheet image)
-══════════════════════════════════════════════════════ */
-const SEED_DATA = [
-  ["NITTY", 638.50], ["ROSIA", 332.87], ["BOTANG", 34.11], ["JACK", 99.60],
-  ["LULU", 135.00], ["PAULINE", 194.39], ["TAARA", 111.10], ["TASI", 80.00],
-  ["JU", 34.67], ["NOFO", 277.07], ["NI CA", 620.00], ["MKT", 15.80],
-  ["CAROLYN", 2.75], ["OLIVIA", 217.50], ["ELISA", 10.00], ["RINTA", 31.80],
-  ["PAURINA", 98.09], ["AMA", 9.00], ["TAVAHAINA", 19.00],
-];
-
-const buildSeeds = () => {
-  const ts = new Date("2026-05-01T09:00:00").toISOString();
-  const players = SEED_DATA.map(([name, balance]) => ({ id: uid(), name, balance, createdAt: ts }));
-  const txns = players.map((p) => ({
-    id: uid(), playerId: p.id, type: "PAYMENT", amount: p.balance,
-    gameId: null, note: "Opening balance (imported from spreadsheet)", createdAt: ts,
-  }));
-  return { players, txns, games: [] };
-};
-
-/* ══════════════════════════════════════════════════════
    DESIGN TOKENS
 ══════════════════════════════════════════════════════ */
 const C = {
-  bg: "#0D1B2A",
-  surface: "#152237",
-  surfaceHi: "#1C2E45",
-  border: "#243550",
-  coral: "#FF6B47",
-  coralDim: "rgba(255,107,71,0.15)",
-  gold: "#FFB830",
-  goldDim: "rgba(255,184,48,0.15)",
-  teal: "#00C9A7",
-  tealDim: "rgba(0,201,167,0.15)",
-  text: "#EDE0CC",
-  muted: "#7A8FA6",
-  win: "#2ECC71",
-  winDim: "rgba(46,204,113,0.15)",
-  danger: "#FF4757",
-  dangerDim: "rgba(255,71,87,0.15)",
-  shadow: "0 4px 24px rgba(0,0,0,0.35)",
-  shadowSm: "0 2px 10px rgba(0,0,0,0.25)",
+  bg: "#F0F4F8",
+  surface: "#FFFFFF",
+  surfaceHi: "#EDF2F7",
+  border: "#CBD5E0",
+  coral: "#D94325",
+  coralDim: "rgba(217,67,37,0.10)",
+  gold: "#B87000",
+  goldDim: "rgba(184,112,0,0.10)",
+  teal: "#007A65",
+  tealDim: "rgba(0,122,101,0.10)",
+  text: "#1A202C",
+  muted: "#4A5568",
+  win: "#1A6E35",
+  winDim: "rgba(26,110,53,0.10)",
+  danger: "#B52B2B",
+  dangerDim: "rgba(181,43,43,0.10)",
+  shadow: "0 4px 24px rgba(0,0,0,0.10)",
+  shadowSm: "0 2px 10px rgba(0,0,0,0.07)",
 };
 
 const FONT_CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800;900&family=Nunito:wght@400;500;600;700;800&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: ${C.bg}; }
+  body { background: ${C.bg}; color: ${C.text}; }
   ::-webkit-scrollbar { width: 3px; }
   ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 4px; }
   input, select, textarea, button { font-family: 'Nunito', sans-serif; }
@@ -86,8 +65,8 @@ function Btn({ children, onClick, variant = "coral", sm = false, full = false, d
   const fs = sm ? 13 : 14;
   const variants = {
     coral: { background: C.coral, color: "#fff" },
-    gold: { background: C.gold, color: "#0D1B2A" },
-    teal: { background: C.teal, color: "#0D1B2A" },
+    gold: { background: C.gold, color: "#FFFFFF" },
+    teal: { background: C.teal, color: "#FFFFFF" },
     ghost: { background: "transparent", color: C.text, border: `1.5px solid ${C.border}` },
     danger: { background: C.danger, color: "#fff" },
     surface: { background: C.surfaceHi, color: C.text },
@@ -111,7 +90,7 @@ function Btn({ children, onClick, variant = "coral", sm = false, full = false, d
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="fade-in" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
+    <div className="fade-in" style={{ position: "fixed", inset: 0, background: "rgba(30,40,60,0.55)", zIndex: 100, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
       <div className="slide-up" style={{ background: C.surface, borderRadius: "22px 22px 0 0", width: "100%", maxWidth: 480, maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 20px 16px", borderBottom: `1px solid ${C.border}` }}>
           <h2 style={{ fontFamily: "Syne,sans-serif", fontSize: 17, fontWeight: 800, color: C.text }}>{title}</h2>
@@ -255,7 +234,7 @@ function Dashboard({ ctx }) {
       {/* Active Game Banner */}
       {activeGame && (
         <div onClick={() => setModal({ type: "activeGame", data: activeGame })}
-          style={{ background: `linear-gradient(135deg, ${C.coral}22, ${C.gold}22)`, border: `1.5px solid ${C.gold}44`, borderRadius: 16, padding: "16px 18px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          style={{ background: `linear-gradient(135deg, ${C.coralDim}, ${C.goldDim})`, border: `1.5px solid ${C.gold}99`, borderRadius: 16, padding: "16px 18px", marginBottom: 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
               <span style={{ width: 7, height: 7, borderRadius: "50%", background: C.win, display: "inline-block" }} />
@@ -347,7 +326,7 @@ function GamesScreen({ ctx }) {
 
       {active ? (
         <div onClick={() => setModal({ type: "activeGame", data: active })}
-          style={{ background: `linear-gradient(140deg, #1A2F1A, #1A2A3A)`, border: `1.5px solid ${C.teal}44`, borderRadius: 18, padding: 20, marginBottom: 20, cursor: "pointer" }}>
+          style={{ background: `linear-gradient(140deg, ${C.tealDim}, ${C.coralDim})`, border: `1.5px solid ${C.teal}99`, borderRadius: 18, padding: 20, marginBottom: 20, cursor: "pointer" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: C.win, boxShadow: `0 0 8px ${C.win}` }} />
@@ -365,7 +344,7 @@ function GamesScreen({ ctx }) {
               { label: "Players In", val: `${active.participants?.length || 0}` },
               { label: "Per Set", val: `$${active.setCost}` },
             ].map(({ label, val }) => (
-              <div key={label} style={{ background: "rgba(255,255,255,0.05)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
+              <div key={label} style={{ background: "rgba(0,0,0,0.04)", borderRadius: 10, padding: "10px 8px", textAlign: "center" }}>
                 <p style={{ fontSize: 10, color: C.muted, marginBottom: 3, textTransform: "uppercase", fontWeight: 700 }}>{label}</p>
                 <p style={{ fontSize: 14, fontWeight: 800, color: C.text }}>{val}</p>
               </div>
@@ -426,11 +405,11 @@ function HistoryScreen({ ctx }) {
 
       {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 18 }}>
-        <div style={{ background: C.winDim, border: `1px solid ${C.win}44`, borderRadius: 12, padding: "12px 14px" }}>
+        <div style={{ background: C.winDim, border: `1px solid ${C.win}66`, borderRadius: 12, padding: "12px 14px" }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: C.win, marginBottom: 4, textTransform: "uppercase" }}>Total In</p>
           <p style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: C.win }}>{$$(totalIn)}</p>
         </div>
-        <div style={{ background: C.dangerDim, border: `1px solid ${C.danger}44`, borderRadius: 12, padding: "12px 14px" }}>
+        <div style={{ background: C.dangerDim, border: `1px solid ${C.danger}66`, borderRadius: 12, padding: "12px 14px" }}>
           <p style={{ fontSize: 10, fontWeight: 700, color: C.danger, marginBottom: 4, textTransform: "uppercase" }}>Total Out</p>
           <p style={{ fontFamily: "Syne,sans-serif", fontSize: 18, fontWeight: 800, color: C.danger }}>{$$(totalOut)}</p>
         </div>
@@ -521,7 +500,7 @@ function PlayerDetailModal({ ctx }) {
   return (
     <Modal title={player.name} onClose={() => setModal(null)}>
       {/* Balance Hero */}
-      <div style={{ background: player.balance >= 0 ? `linear-gradient(135deg, ${C.teal}22, ${C.teal}11)` : C.dangerDim, border: `1.5px solid ${player.balance >= 0 ? C.teal + "55" : C.danger + "55"}`, borderRadius: 16, padding: 20, marginBottom: 16, textAlign: "center" }}>
+      <div style={{ background: player.balance >= 0 ? C.tealDim : C.dangerDim, border: `1.5px solid ${player.balance >= 0 ? C.teal + "55" : C.danger + "55"}`, borderRadius: 16, padding: 20, marginBottom: 16, textAlign: "center" }}>
         <p style={{ fontSize: 11, color: C.muted, marginBottom: 4, fontWeight: 700, textTransform: "uppercase" }}>Current Balance</p>
         <p style={{ fontFamily: "Syne,sans-serif", fontSize: 40, fontWeight: 900, color: player.balance >= 0 ? C.teal : C.danger }}>{$$(player.balance)}</p>
       </div>
@@ -650,7 +629,7 @@ function ActiveGameModal({ ctx }) {
       <div style={{ display: "flex", background: C.surfaceHi, borderRadius: 10, padding: 3, marginBottom: 20 }}>
         {["buyins", "winners"].map((v) => (
           <button key={v} onClick={() => setView(v)}
-            style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: view === v ? C.surface : "transparent", color: view === v ? C.text : C.muted, boxShadow: view === v ? C.shadowSm : "none", transition: "all 0.15s" }}>
+            style={{ flex: 1, padding: "9px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700, background: view === v ? C.surfaceHi : "transparent", color: view === v ? C.text : C.muted, boxShadow: view === v ? C.shadowSm : "none", transition: "all 0.15s" }}>
             {v === "buyins" ? `Buy Ins (${existingIds.size + pendingCount})` : `Winners (${(game.winners || []).length})`}
           </button>
         ))}
@@ -664,7 +643,7 @@ function ActiveGameModal({ ctx }) {
               <p style={{ fontSize: 11, fontWeight: 700, color: C.teal, marginBottom: 8, textTransform: "uppercase" }}>✓ Confirmed ({inGamePlayers.length})</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
                 {inGamePlayers.map((p) => (
-                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: C.tealDim, border: `1px solid ${C.teal}33` }}>
+                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, background: C.tealDim, border: `1px solid ${C.teal}66` }}>
                     <Check size={14} color={C.teal} />
                     <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>{p.name}</span>
                     <Badge color="teal">Paid {$$(game.setCost)}</Badge>
@@ -713,7 +692,7 @@ function ActiveGameModal({ ctx }) {
             <div style={{ marginBottom: 20 }}>
               <p style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 8, textTransform: "uppercase" }}>Declared Winners</p>
               {(game.winners || []).map((w, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: C.goldDim, border: `1px solid ${C.gold}33`, borderRadius: 10, marginBottom: 6 }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: C.goldDim, border: `1px solid ${C.gold}88`, borderRadius: 10, marginBottom: 6 }}>
                   <Star size={14} color={C.gold} fill={C.gold} />
                   <span style={{ flex: 1, fontSize: 13, fontWeight: 700, color: C.text }}>{players.find((p) => p.id === w.playerId)?.name || "Unknown"}</span>
                   <span style={{ fontSize: 14, fontWeight: 800, color: C.gold }}>+{$$(w.prizeAmount)}</span>
@@ -766,12 +745,7 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      let [p, t, g] = await Promise.all([sget(SK.P), sget(SK.T), sget(SK.G)]);
-      if (!p) {
-        const s = buildSeeds();
-        p = s.players; t = s.txns; g = s.games;
-        await Promise.all([sset(SK.P, p), sset(SK.T, t), sset(SK.G, g)]);
-      }
+      const [p, t, g] = await Promise.all([sget(SK.P), sget(SK.T), sget(SK.G)]);
       setPlayers(p || []); setTxns(t || []); setGames(g || []);
       setLoaded(true);
     })();
