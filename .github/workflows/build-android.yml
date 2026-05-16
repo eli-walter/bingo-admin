@@ -1,0 +1,231 @@
+# File: .github/workflows/build-android.yml
+# Manually triggered workflow to build a debug Android APK for Manuia Finance.
+# Trigger via: GitHub → Actions → "Build Android APK" → Run workflow
+
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: 'Build notes (optional)'
+        required: false
+        default: 'Manual debug build'
+
+jobs:
+  build-android:
+    name: Build Manuia Finance APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Node.js ─────────────────────────────────────────────────────────
+      - name: Set up Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # ── 3. Java (required by Gradle) ───────────────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # ── 4. Install all Node dependencies ───────────────────────────────────
+      - name: Install Node dependencies
+        run: npm install
+
+      # ── 5. Build the React web app ─────────────────────────────────────────
+      - name: Build React web app
+        run: npm run build
+
+      # ── 6. Add Android platform if not yet committed ───────────────────────
+      - name: Add Capacitor Android platform
+        run: |
+          if [ ! -d "android" ]; then
+            echo "📱 Android folder not found — running: npx cap add android"
+            npx cap add android
+          else
+            echo "✅ Android platform folder already present"
+          fi
+
+      # ── 7. ImageMagick for icon/splash generation ──────────────────────────
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y imagemagick bc
+
+      # ── 8. Generate all launcher icons from assets/icon.png ───────────────
+      - name: Generate launcher icons (all densities)
+        run: |
+          ICON="assets/icon.png"
+          echo "🎨 Generating launcher icons…"
+
+          # Square icons for each screen density
+          for ENTRY in "mipmap-mdpi:48" "mipmap-hdpi:72" "mipmap-xhdpi:96" "mipmap-xxhdpi:144" "mipmap-xxxhdpi:192"; do
+            DENSITY="${ENTRY%%:*}"
+            SIZE="${ENTRY##*:}"
+            DIR="android/app/src/main/res/${DENSITY}"
+            mkdir -p "$DIR"
+
+            # Standard square launcher icon
+            convert "$ICON" -resize ${SIZE}x${SIZE} "${DIR}/ic_launcher.png"
+
+            # Round launcher icon (circle-cropped)
+            convert "$ICON" -resize ${SIZE}x${SIZE} \
+              \( +clone -alpha extract \
+                 -draw "fill white circle $((SIZE/2)),$((SIZE/2)) $((SIZE/2)),0" \) \
+              -alpha off -compose CopyOpacity -composite \
+              "${DIR}/ic_launcher_round.png"
+
+            echo "  ✅ ${DENSITY} — ${SIZE}×${SIZE}px (square + round)"
+          done
+
+          # ── Adaptive icon XML (Android 8+, API 26+) ──────────────────────
+          ANYDPI_DIR="android/app/src/main/res/mipmap-anydpi-v26"
+          mkdir -p "$ANYDPI_DIR"
+
+          cat > "${ANYDPI_DIR}/ic_launcher.xml" << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ic_launcher_background"/>
+            <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          XMLEOF
+
+          cat > "${ANYDPI_DIR}/ic_launcher_round.xml" << 'XMLEOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+            <background android:drawable="@color/ic_launcher_background"/>
+            <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+          </adaptive-icon>
+          XMLEOF
+
+          # Foreground layer for adaptive icon (108dp target = 432px at xxxhdpi)
+          convert "$ICON" -resize 432x432 \
+            -gravity center -background none -extent 432x432 \
+            "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png"
+
+          # Background colour for adaptive icon
+          VALUES_DIR="android/app/src/main/res/values"
+          mkdir -p "$VALUES_DIR"
+          if ! grep -q "ic_launcher_background" "${VALUES_DIR}/colors.xml" 2>/dev/null; then
+            if [ -f "${VALUES_DIR}/colors.xml" ]; then
+              sed -i 's|</resources>|    <color name="ic_launcher_background">#0D1B2A</color>\n</resources>|' \
+                "${VALUES_DIR}/colors.xml"
+            else
+              cat > "${VALUES_DIR}/colors.xml" << 'COLOREOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+            <color name="ic_launcher_background">#0D1B2A</color>
+          </resources>
+          COLOREOF
+            fi
+          fi
+
+          echo "🎉 All launcher icons generated!"
+
+      # ── 9. Generate status-bar / top-bar notification icon ────────────────
+      # Android requires notification icons to be white + transparent only.
+      # This icon appears in the top status bar when the app is running.
+      - name: Generate top-bar / notification icon
+        run: |
+          ICON="assets/icon.png"
+          echo "🔔 Generating status-bar icons…"
+
+          for ENTRY in "mdpi:24" "hdpi:36" "xhdpi:48" "xxhdpi:72" "xxxhdpi:96"; do
+            DENSITY="${ENTRY%%:*}"
+            SIZE="${ENTRY##*:}"
+            DIR="android/app/src/main/res/drawable-${DENSITY}"
+            mkdir -p "$DIR"
+
+            # White silhouette on transparent background (Android guideline)
+            convert "$ICON" -resize ${SIZE}x${SIZE} \
+              -alpha set -fuzz 10% \
+              -fill white -colorize 100 \
+              "${DIR}/ic_stat_notification.png"
+
+            echo "  ✅ drawable-${DENSITY} — ${SIZE}×${SIZE}px"
+          done
+
+          echo "🎉 Top-bar icons generated!"
+
+      # ── 10. Generate splash screen ─────────────────────────────────────────
+      # Icon is rendered at 35% of the reference screen width (1080px),
+      # centred on the app's background colour.
+      - name: Generate splash screen (icon at 35% screen width)
+        run: |
+          ICON="assets/icon.png"
+          DRAWABLE_DIR="android/app/src/main/res/drawable"
+          mkdir -p "$DRAWABLE_DIR"
+
+          CANVAS_W=1080
+          CANVAS_H=1920
+          ICON_SIZE=$(echo "$CANVAS_W * 35 / 100" | bc)   # = 378px
+
+          echo "🖼  Splash: canvas ${CANVAS_W}×${CANVAS_H}, icon ${ICON_SIZE}×${ICON_SIZE}px (35% width)"
+
+          # Portrait splash
+          convert -size ${CANVAS_W}x${CANVAS_H} xc:"#0D1B2A" \
+            \( "$ICON" -resize ${ICON_SIZE}x${ICON_SIZE} \) \
+            -gravity center -composite \
+            "${DRAWABLE_DIR}/splash.png"
+
+          # Landscape splash (35% of 1920 wide canvas)
+          LAND_W=1920
+          LAND_H=1080
+          LAND_ICON=$(echo "$LAND_W * 35 / 100" | bc)     # = 672px
+
+          convert -size ${LAND_W}x${LAND_H} xc:"#0D1B2A" \
+            \( "$ICON" -resize ${LAND_ICON}x${LAND_ICON} \) \
+            -gravity center -composite \
+            "${DRAWABLE_DIR}/splash_land.png"
+
+          echo "✅ Splash screens generated"
+
+      # ── 11. Accept Android SDK licences ────────────────────────────────────
+      - name: Accept Android SDK licences
+        run: |
+          SDK_MANAGER="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager"
+          if [ -f "$SDK_MANAGER" ]; then
+            yes | "$SDK_MANAGER" --licenses 2>/dev/null || true
+          else
+            echo "sdkmanager not found at expected path — licences may already be accepted"
+          fi
+
+      # ── 12. Sync Capacitor → Android ───────────────────────────────────────
+      - name: Sync Capacitor to Android
+        run: npx cap sync android
+
+      # ── 13. Build debug APK ────────────────────────────────────────────────
+      - name: Make Gradle wrapper executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK with Gradle
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+
+      # ── 14. Rename & upload ────────────────────────────────────────────────
+      - name: Rename APK to manuia-finance.apk
+        run: |
+          APK=$(find android -name "app-debug.apk" | head -1)
+          if [ -z "$APK" ]; then
+            echo "❌ APK not found. Listing build outputs:" && find android -name "*.apk"
+            exit 1
+          fi
+          cp "$APK" manuia-finance.apk
+          echo "✅ APK saved as manuia-finance.apk ($(du -sh manuia-finance.apk | cut -f1))"
+
+      - name: Upload manuia-finance.apk as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: manuia-finance
+          path: manuia-finance.apk
+          retention-days: 30
