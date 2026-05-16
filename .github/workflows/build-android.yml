@@ -202,14 +202,17 @@ jobs:
         run: npx cap sync android
 
       # ── 13. Build debug APK ────────────────────────────────────────────────
+      - name: Write android/local.properties (point Gradle to correct SDK)
+        run: echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+
       - name: Make Gradle wrapper executable
         run: chmod +x android/gradlew
 
       - name: Build debug APK with Gradle
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
-        env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        run: |
+          unset ANDROID_SDK_ROOT
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
       # ── 14. Rename & upload ────────────────────────────────────────────────
       - name: Rename APK to manuia-finance.apk
