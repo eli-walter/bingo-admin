@@ -113,15 +113,19 @@ jobs:
           # Background colour for adaptive icon
           VALUES_DIR="android/app/src/main/res/values"
           mkdir -p "$VALUES_DIR"
+
+          # Remove Capacitor-generated ic_launcher_background.xml to avoid duplicate resource error
+          rm -f "${VALUES_DIR}/ic_launcher_background.xml"
+
           if ! grep -q "ic_launcher_background" "${VALUES_DIR}/colors.xml" 2>/dev/null; then
             if [ -f "${VALUES_DIR}/colors.xml" ]; then
-              sed -i 's|</resources>|    <color name="ic_launcher_background">#0D1B2A</color>\n</resources>|' \
+              sed -i 's|</resources>|    <color name="ic_launcher_background">#F0F4F8</color>\n</resources>|' \
                 "${VALUES_DIR}/colors.xml"
             else
               cat > "${VALUES_DIR}/colors.xml" << 'COLOREOF'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-            <color name="ic_launcher_background">#0D1B2A</color>
+            <color name="ic_launcher_background">#F0F4F8</color>
           </resources>
           COLOREOF
             fi
@@ -170,7 +174,7 @@ jobs:
           echo "🖼  Splash: canvas ${CANVAS_W}×${CANVAS_H}, icon ${ICON_SIZE}×${ICON_SIZE}px (35% width)"
 
           # Portrait splash
-          convert -size ${CANVAS_W}x${CANVAS_H} xc:"#0D1B2A" \
+          convert -size ${CANVAS_W}x${CANVAS_H} xc:"#F0F4F8" \
             \( "$ICON" -resize ${ICON_SIZE}x${ICON_SIZE} \) \
             -gravity center -composite \
             "${DRAWABLE_DIR}/splash.png"
@@ -180,7 +184,7 @@ jobs:
           LAND_H=1080
           LAND_ICON=$(echo "$LAND_W * 35 / 100" | bc)     # = 672px
 
-          convert -size ${LAND_W}x${LAND_H} xc:"#0D1B2A" \
+          convert -size ${LAND_W}x${LAND_H} xc:"#F0F4F8" \
             \( "$ICON" -resize ${LAND_ICON}x${LAND_ICON} \) \
             -gravity center -composite \
             "${DRAWABLE_DIR}/splash_land.png"
